@@ -1,6 +1,3 @@
-// Implement a ChainMap as in Python -
-// https://blog.florimondmanca.com/a-practical-usage-of-chainmap-in-python
-
 use std::cmp::Eq;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -11,7 +8,7 @@ pub struct ChainMap<K, V> {
     maps: Vec<ChainMapType<K, V>>,
 }
 
-impl<K: Hash + Eq + Clone, V: Clone> ChainMap<K, V> {
+impl<K: Hash + Eq, V> ChainMap<K, V> {
     pub fn get(&self, k: &K) -> Option<&V> {
         // Check whether an element is found in any one of the maps
         for m in &self.maps {
@@ -44,12 +41,30 @@ impl<K: Hash + Eq + Clone, V: Clone> ChainMap<K, V> {
         ChainMap { maps }
     }
 
-    // Had to add Clone due to this method - is it worth it, or is this the best
-    // way to do this?
+    pub fn empty() -> Self {
+        ChainMap { maps: vec![] }
+    }
+
+    pub fn add_map(&mut self, m: ChainMapType<K, V>) -> &mut Self {
+        self.maps.push(m);
+        self
+    }
+}
+
+impl<K: Hash + Eq + Clone, V: Clone> ChainMap<K, V> {
     pub fn parents(&self) -> Option<Self> {
         if self.maps.len() > 0 {
             let (ps, _) = self.maps.split_at(self.maps.len() - 1);
             Some(ChainMap { maps: ps.to_vec() })
+        } else {
+            None
+        }
+    }
+
+    pub fn children(&self) -> Option<Self> {
+        if self.maps.len() > 0 {
+            let (_, cs) = self.maps.split_at(1);
+            Some(ChainMap { maps: cs.to_vec() })
         } else {
             None
         }
@@ -123,6 +138,35 @@ mod tests {
     }
 
     #[test]
+    fn test_chainmap_children() {
+        let mut m1 = HashMap::<i32, String>::new();
+        m1.insert(1, "one".to_string());
+        m1.insert(2, "two".to_string());
+        m1.insert(3, "three".to_string());
+
+        let mut m2 = HashMap::<i32, String>::new();
+        m2.insert(11, "eleven".to_string());
+        m2.insert(22, "twenty two".to_string());
+        m2.insert(33, "thirty three".to_string());
+
+        let cmap = ChainMap::new(vec![m1, m2]);
+
+        assert!(cmap.children().is_some());
+
+        let cmap2 = cmap.children().unwrap();
+        assert!(cmap2.children().is_some());
+
+        assert_eq!(cmap2.get(&11), Some(&"eleven".to_string()));
+        assert_eq!(cmap2.get(&22), Some(&"twenty two".to_string()));
+        assert_eq!(cmap2.get(&33), Some(&"thirty three".to_string()));
+        assert_eq!(cmap2.get(&1), None);
+        assert_eq!(cmap2.get(&2), None);
+
+        let cmap3 = cmap2.children().unwrap();
+        assert!(cmap3.children().is_none());
+    }
+
+    #[test]
     fn test_chainmap_empty() {
         // Non-empty one
         {
@@ -138,5 +182,17 @@ mod tests {
             let cmap = ChainMap::new(vec![HashMap::<i32, String>::new()]);
             assert!(cmap.is_empty());
         }
+    }
+
+    #[test]
+    fn test_chainmap_add_map() {
+        let mut m: HashMap<i32, String> = HashMap::new();
+        m.insert(3, "three".to_string());
+
+        let mut cmap: ChainMap<i32, String> = ChainMap::empty();
+        assert_eq!(cmap.get(&3), None);
+
+        cmap.add_map(m);
+        assert_eq!(cmap.get(&3), Some(&"three".to_string()));
     }
 }
